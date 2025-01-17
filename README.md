@@ -13,7 +13,7 @@ Simply launch AntiLock.exe and then launch PoE 2.
 **I'd reccomend that you launch AntiLock prior to launching PoE 2**.
 
 ### Why does it require Administrator access?
-It seems that, at least from what I can tell, you are not able to set process priorties to "Realtime" unless running in an elevated context and with the extent of the crashing that I've had on my system, Realtime priority has provided the best level of crash reduction.
+It seems that, at least from what I can tell, you are not able to set process priorities to "Realtime" unless running in an elevated context and with the extent of the crashing that I've had on my system, Realtime priority has provided the best level of crash reduction.
 
 ### What does this "fix"?
 At least with my specific hardware combination:
