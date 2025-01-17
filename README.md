@@ -7,7 +7,10 @@ As the program mentions in the console window, it takes heavy inspiration from [
 ![Terminal window preview](/resources/AntiLock.png)
 
 ### How do I use it?
-Simply launch AntiLock.exe and then launch PoE 2.
+1. Install **[.NET Desktop Runtime 9](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)**
+
+2. Simply launch AntiLock.exe and then launch PoE 2.
+
 **I recommend that you launch AntiLock prior to launching PoE 2**.
 
 ### Why does it require Administrator access?
