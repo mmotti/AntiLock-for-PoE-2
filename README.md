@@ -14,6 +14,11 @@ Simply launch AntiLock.exe and then launch PoE 2.
 ### Why does it require Administrator access?
 From what I can tell, you cannot set process priorities to "Realtime" unless running in an elevated context. With the extent of the crashing that I've had on my system, Realtime priority has provided the best level of crash reduction.
 
+### Anti-Virus false positives
+There has been at least one report of this application being flagged as suspicious. This could be due to any number of reasons, including bugs with self-contained (framework independent), single file & trimmed applications. Or it could be flagging that we’re monitoring processes and changing priorities.
+
+If you’re still unsure or wary, please feel free to take a look through the source code in [Program.cs](Program.cs).
+
 ### What does this "fix"?
 At least with my specific hardware combination:
 1. Crashes during game startup.
