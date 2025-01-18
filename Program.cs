@@ -88,12 +88,16 @@ internal static partial class Program
     private static string _logFilePath = string.Empty;
     private static string _processDirectory = string.Empty;
     private static long _lastPosition;
-    private static bool _initialDetectionDone;
     private static int _totalCores;
-    private static bool _logFileNotificationShown;
     private static int? _cachedCoreCount;
-    private static readonly ProcessState State = new ProcessState();
-    private static readonly Lock ConsoleLock = new Lock();
+    
+    // Flags
+    private static bool _initialDetectionDone;
+    private static bool _logFileNotificationShown;
+    
+    // Locks
+    private static readonly ProcessState State = new();
+    private static readonly Lock ConsoleLock = new();
     
     // Queue for handling affinity changes
     private static readonly ConcurrentQueue<(int[] excludedCores, ProcessPriorityClass priority)> PendingAffinityChanges = new();
@@ -165,7 +169,7 @@ internal static partial class Program
     
     private static string? DetermineLogFilePath(Process process)
     {
-        try 
+        try
         {
             // Get the directory of the process executable
             var processDir = process.MainModule?.FileName;
@@ -186,9 +190,13 @@ internal static partial class Program
                 WriteLineWithPrefix("info", $"Log file detected: {LogFilename}");
                 return logPath;
             }
+
+            if (_logFileNotificationShown) return null;
             
             // Fallback log path if not found
             WriteLineWithPrefix("warn", $"Log file not found at {logPath}. Waiting for file to become available.");
+            _logFileNotificationShown = true;
+
             return null;
         }
         catch (Exception ex)
@@ -467,10 +475,7 @@ internal static partial class Program
                     if (_initialDetectionDone)
                     {
                         // Reset monitoring state
-                        _initialDetectionDone = false;
-                        _logFilePath = string.Empty;
-                        _processDirectory = string.Empty;
-                        _cachedCoreCount = null;
+                        ResetMonitorState();
                     }
                     
                     WriteLineWithPrefix("warn", "Multiple game processes detected. Please ensure only one instance is running.", true);
@@ -496,16 +501,19 @@ internal static partial class Program
                         // Wait for log file to become available
                         while (detectedLogPath == null && !cancellationToken.IsCancellationRequested)
                         {
-                            if (!_logFileNotificationShown)
-                            {
-                                WriteLineWithPrefix("warn", "Waiting for log file to become available. Please ensure the game is fully launched.", true);
-                                _logFileNotificationShown = true;
-                            }
-
                             await Task.Delay(LogFileRetryDelay, cancellationToken);
+                            if (process.HasExited)
+                                break;
                             detectedLogPath = DetermineLogFilePath(process);
                         }
 
+                        if (process.HasExited)
+                        {
+                            WriteLineWithPrefix("info", "Process closed. Waiting for new instance...", true);
+                            ResetMonitorState();
+                            break;
+                        }
+                        
                         // Reset notification flag once log file is found
                         _logFileNotificationShown = false;
 
@@ -532,7 +540,7 @@ internal static partial class Program
                         }
                         else
                         {
-                            WriteLineWithPrefix("action", $"Applying default affinity (Excluded CPUs: {defaultExcludedCoresOutput})");
+                            WriteLineWithPrefix("action", $"Applying default affinity (Excluded CPUs: {defaultExcludedCoresOutput})", true);
                             QueueAffinityChange(DefaultExcludedCores, ProcessPriorityClass.Normal);
                         }
                     
@@ -541,10 +549,7 @@ internal static partial class Program
                     }
                     case 0 when _initialDetectionDone:
                         WriteLineWithPrefix("info", "Process closed. Waiting for new instance...", true);
-                        _initialDetectionDone = false;
-                        _logFilePath = string.Empty;
-                        _processDirectory = string.Empty;
-                        _cachedCoreCount = null;
+                        ResetMonitorState();
                         break;
                 }
             }
@@ -715,6 +720,15 @@ internal static partial class Program
         }
 
         return excludedCores.Aggregate(mask, (current, core) => current & ~(1L << core));
+    }
+
+    private static void ResetMonitorState()
+    {
+        _initialDetectionDone = false;
+        _logFilePath = string.Empty;
+        _processDirectory = string.Empty;
+        _cachedCoreCount = null;
+        _logFileNotificationShown = false;
     }
     
     private static int CountActiveCores(long affinityMask) 
