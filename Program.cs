@@ -416,9 +416,20 @@ internal static partial class Program
                     continue;
                 }
 
-                // Don't interfere with loading screen affinity changes
                 if (State.IsInLoadingScreen)
                 {
+                    // Still check if process is responding, but use a longer timeout
+                    if (!process.Responding)
+                    {
+                        // Only start recovery if we haven't seen any log activity for a while
+                        var timeSinceLastResponse = DateTime.Now - State.LastResponseTime;
+                        if (timeSinceLastResponse > UnresponsiveTimeout * 2)  // Double timeout during loading
+                        {
+                            WriteLineWithPrefix("warn", "Process appears to have crashed during loading screen.", true);
+                            State.Status = ProcessStatus.Recovering;
+                            await AttemptProcessRecovery(process, cancellationToken);
+                        }
+                    }
                     await Task.Delay(ProcessUnresponsiveCheckPollingRateMs, cancellationToken);
                     continue;
                 }
