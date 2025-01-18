@@ -1,15 +1,15 @@
-# AntiLock for Path of Exile 2
+# AntiFreeze for Path of Exile 2
 
 Providing a temporary "solution" for those of us who are struggling with constant system crashes / lockups requiring hard reboots. If you've managed to find yourself here, you know exactly what you're looking for!
 
 As the program mentions in the console window, it takes heavy inspiration from [PoEUncrasher](https://github.com/Kapps/PoEUncrasher) by Kapps. It's also been greatly assisted by the use of Claude 3.5 Sonnet.
 
-![Terminal window preview](/resources/AntiLock.png)
+![Terminal window preview](/resources/AntiFreeze.png)
 
 ### How do I use it?
-Simply launch AntiLock.exe and then launch PoE 2.
+Simply launch AntiFreeze.exe and then launch PoE 2.
 
-**I recommend that you launch AntiLock prior to launching PoE 2**.
+**I recommend that you launch AntiFreeze prior to launching PoE 2**.
 
 ### Why does it require Administrator access?
 From what I can tell, you cannot set process priorities to "Realtime" unless running in an elevated context. With the extent of the crashing that I've had on my system, Realtime priority has provided the best level of crash reduction.

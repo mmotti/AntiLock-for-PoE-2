@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PoE2AntiLockup;
+namespace POE2_AntiFreeze;
 
 internal static partial class Program
 {
@@ -112,12 +112,12 @@ internal static partial class Program
     private static async Task Main(string[] args)
     {
         Console.WriteLine("""
-                              _          _   _ _               _    
-                             / \   _ __ | |_(_) |    ___   ___| | __
-                            / _ \ | '_ \| __| | |   / _ \ / __| |/ /
-                           / ___ \| | | | |_| | |__| (_) | (__|   < 
-                          /_/   \_\_| |_|\__|_|_____\___/ \___|_|\_\
-                                                                    
+                              _          _   _ _____                      
+                             / \   _ __ | |_(_)  ___| __ ___  ___ _______ 
+                            / _ \ | '_ \| __| | |_ | '__/ _ \/ _ \_  / _ \
+                           / ___ \| | | | |_| |  _|| | |  __/  __// /  __/
+                          /_/   \_\_| |_|\__|_|_|  |_|  \___|\___/___\___|
+                                                                          
                           With a little (a LOT of) assistance from Claude 3.5 Sonnet.
                           Inspired by PoEUncrasher by Kapps (https://github.com/Kapps/PoEUncrasher)
                            
@@ -688,7 +688,7 @@ internal static partial class Program
 
     private static string[] GetPoEFortune()
     {
-        var exaltedCount = Random.Shared.Next(5, 20);
+        var exaltedCount = Random.Shared.Next(10, 25);
         var divineCount = Random.Shared.Next(1, 3);
         return
         [

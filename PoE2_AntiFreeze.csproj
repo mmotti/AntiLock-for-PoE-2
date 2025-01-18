@@ -6,7 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <ApplicationIcon>kekw.ico</ApplicationIcon>
-        <AssemblyName>AntiLock</AssemblyName>
+        <AssemblyName>AntiFreeze</AssemblyName>
     </PropertyGroup>
 
     <PropertyGroup>
