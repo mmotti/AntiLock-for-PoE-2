@@ -607,16 +607,21 @@ internal static partial class Program
         // If affinity is already what we want, just verify priority
         if (currentAffinity == newAffinityMask)
         {
+            // Report current configuration instead of showing a non-change
+            WriteLineWithPrefix("info", $"CPU configuration already at desired state ({CountActiveCores(currentAffinity)}/{_totalCores} active)");
+            
             // Only update priority if it's different
-            if (process.PriorityClass == priority) return;
-            try
+            if (process.PriorityClass != priority)
             {
-                process.PriorityClass = priority;
-                WriteLineWithPrefix("info", $"Process priority set to {priority}");
-            }
-            catch (Exception ex)
-            {
-                WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
+                try
+                {
+                    process.PriorityClass = priority;
+                    WriteLineWithPrefix("info", $"Process priority set to {priority}");
+                }
+                catch (Exception ex)
+                {
+                    WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
+                }
             }
             return;
         }
