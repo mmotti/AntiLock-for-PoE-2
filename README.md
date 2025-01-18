@@ -4,7 +4,7 @@ Providing a temporary "solution" for those of us who are struggling with constan
 
 As the program mentions in the console window, it takes heavy inspiration from [PoEUncrasher](https://github.com/Kapps/PoEUncrasher) by Kapps. It's also been greatly assisted by the use of Claude 3.5 Sonnet.
 
-![Terminal window preview](/resources/AntiFreeze.png)
+![Terminal window preview](/resources/AntiFreezeTerminal.png)
 
 ### How do I use it?
 Simply launch AntiFreeze.exe and then launch PoE 2.
