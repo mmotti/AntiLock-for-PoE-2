@@ -628,15 +628,15 @@ internal static partial class Program
         try
         {
             var processes = GetGameProcesses();
-            if (processes.Length == 0)
+            
+            switch (processes.Length)
             {
-                WriteLineWithPrefix("error", "Process not found.");
-                return;
-            }
-            if (processes.Length > 1)
-            {
-                WriteLineWithPrefix("error", "Multiple game processes detected. Skipping affinity change.");
-                return;
+                case 0:
+                    WriteLineWithPrefix("error", "Process not found.");
+                    return;
+                case > 1:
+                    WriteLineWithPrefix("error", "Multiple game processes detected. Skipping affinity change.");
+                    return;
             }
 
             var process = processes[0];
