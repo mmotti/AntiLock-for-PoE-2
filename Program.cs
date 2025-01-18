@@ -55,7 +55,7 @@ internal static partial class Program
     }
     
     // Watch configuration
-    private const string ProcessName = "PathOfExileSteam";
+    private static readonly string[] ProcessNames = ["PathOfExileSteam", "PathOfExile"];
     private const string LogFilename = "Client.txt";
     private const string LogSubdirectory = "logs";
     
@@ -94,7 +94,6 @@ internal static partial class Program
     private static int? _cachedCoreCount;
     private static readonly ProcessState State = new ProcessState();
     private static readonly Lock ConsoleLock = new Lock();
-    private static readonly Random random = new();
     
     // Queue for handling affinity changes
     private static readonly ConcurrentQueue<(int[] excludedCores, ProcessPriorityClass priority)> PendingAffinityChanges = new();
@@ -133,7 +132,7 @@ internal static partial class Program
         GetPoEFortune().ToList().ForEach(line => WriteLineWithPrefix("info", line));
 
         Console.WriteLine();
-        WriteLineWithPrefix("info", $"Waiting for {ProcessName} process...", true);
+        WriteLineWithPrefix("info", $"Waiting for game process...", true);
 
         var cancellationTokenSource = new CancellationTokenSource();
         
@@ -205,83 +204,95 @@ internal static partial class Program
         {
             try 
             {
-                var processes = Process.GetProcessesByName(ProcessName);
-                if (processes.Length > 0)
+                var processes = GetGameProcesses();
+                switch (processes.Length)
                 {
-                    var process = processes[0];
-                    
-                    // Check if process is responding
-                    if (!process.Responding)
+                    case 0:
+                        // No process to monitor, just wait for next cycle
+                        await Task.Delay(ProcessUnresponsiveCheckPollingRateMs, cancellationToken);
+                        continue;
+                    case 1:
                     {
-                        if (!State.IsUnresponsive)
+                        var process = processes[0];
+                        
+                        // Check if process is responding
+                        if (!process.Responding)
                         {
-                            State.IsUnresponsive = true;
-                            State.LastResponseTime = DateTime.Now;
-                            _currentRecoveryAttempt = 0;
-                            
-                            WriteLineWithPrefix("warn", "Process became unresponsive. Applying temporary affinity restrictions...", true);
-                            QueueAffinityChange(RestrictedExcludedCores, ProcessPriorityClass.RealTime);
-                        }
-                        else if (DateTime.Now - State.LastResponseTime > UnresponsiveTimeout)
-                        {
-                            // Calculate delay for this attempt using exponential backoff
-                            var currentDelay = Math.Min(
-                                InitialRecoveryAttemptDelayMs * (int)Math.Pow(2, _currentRecoveryAttempt),
-                                MaxRecoveryAttemptDelayMs
-                            );
-
-                            WriteLineWithPrefix("warn", $"Process still unresponsive. Recovery attempt {_currentRecoveryAttempt + 1}/{MaxRecoveryAttempts}", true);
-                            
-                            try
+                            if (!State.IsUnresponsive)
                             {
-                                // First try graceful shutdown
-                                process.CloseMainWindow();
-                                await Task.Delay(ProcessCloseWindowDelayMs, cancellationToken);
-                                
-                                if (!process.HasExited)
-                                {
-                                    if (_currentRecoveryAttempt >= MaxRecoveryAttempts - 1)
-                                    {
-                                        WriteLineWithPrefix("error", "Max recovery attempts reached. Forcing process termination.", true);
-                                        process.Kill();
-                                    }
-                                    else
-                                    {
-                                        WriteLineWithPrefix("info", $"Waiting {currentDelay/1000.0:F1}s before next recovery attempt...");
-                                        await Task.Delay(currentDelay, cancellationToken);
-                                        _currentRecoveryAttempt++;
-                                        continue;
-                                    }
-                                }
-                                
-                                // Reset all states
-                                _initialDetectionDone = false;
-                                State.IsUnresponsive = false;
-                                State.IsInLoadingScreen = false;
+                                State.IsUnresponsive = true;
+                                State.LastResponseTime = DateTime.Now;
                                 _currentRecoveryAttempt = 0;
                                 
-                                WriteLineWithPrefix("info", "Process terminated. Waiting for new instance...", true);
+                                WriteLineWithPrefix("warn", "Process became unresponsive. Applying temporary affinity restrictions...", true);
+                                QueueAffinityChange(RestrictedExcludedCores, ProcessPriorityClass.RealTime);
                             }
-                            catch (Exception ex)
+                            else if (DateTime.Now - State.LastResponseTime > UnresponsiveTimeout)
                             {
-                                WriteLineWithPrefix("error", $"Failed to handle unresponsive process: {ex.Message}");
+                                // Calculate delay for this attempt using exponential backoff
+                                var currentDelay = Math.Min(
+                                    InitialRecoveryAttemptDelayMs * (int)Math.Pow(2, _currentRecoveryAttempt),
+                                    MaxRecoveryAttemptDelayMs
+                                );
+
+                                WriteLineWithPrefix("warn", $"Process still unresponsive. Recovery attempt {_currentRecoveryAttempt + 1}/{MaxRecoveryAttempts}", true);
+                                
+                                try
+                                {
+                                    // First try graceful shutdown
+                                    process.CloseMainWindow();
+                                    await Task.Delay(ProcessCloseWindowDelayMs, cancellationToken);
+                                    
+                                    if (!process.HasExited)
+                                    {
+                                        if (_currentRecoveryAttempt >= MaxRecoveryAttempts - 1)
+                                        {
+                                            WriteLineWithPrefix("error", "Max recovery attempts reached. Forcing process termination.", true);
+                                            process.Kill();
+                                        }
+                                        else
+                                        {
+                                            WriteLineWithPrefix("info", $"Waiting {currentDelay/1000.0:F1}s before next recovery attempt...");
+                                            await Task.Delay(currentDelay, cancellationToken);
+                                            _currentRecoveryAttempt++;
+                                            continue;
+                                        }
+                                    }
+                                    
+                                    // Reset all states
+                                    _initialDetectionDone = false;
+                                    State.IsUnresponsive = false;
+                                    State.IsInLoadingScreen = false;
+                                    _currentRecoveryAttempt = 0;
+                                    
+                                    WriteLineWithPrefix("info", "Process terminated. Waiting for new instance...", true);
+                                }
+                                catch (Exception ex)
+                                {
+                                    WriteLineWithPrefix("error", $"Failed to handle unresponsive process: {ex.Message}");
+                                }
                             }
                         }
-                    }
-                    else
-                    {
-                        // Process is responding
-                        if (State.IsUnresponsive)
+                        else
                         {
-                            WriteLineWithPrefix("info", $"Process recovered after {_currentRecoveryAttempt} attempts. Restoring normal configuration.", true);
-                            QueueAffinityChange(DefaultExcludedCores, ProcessPriorityClass.Normal);
-                            State.IsUnresponsive = false;
-                            _currentRecoveryAttempt = 0;
+                            // Process is responding
+                            if (State.IsUnresponsive)
+                            {
+                                WriteLineWithPrefix("info", $"Process recovered after {_currentRecoveryAttempt} attempts. Restoring normal configuration.", true);
+                                QueueAffinityChange(DefaultExcludedCores, ProcessPriorityClass.Normal);
+                                State.IsUnresponsive = false;
+                                _currentRecoveryAttempt = 0;
+                            }
+                            
+                            // Update last response time
+                            State.LastResponseTime = DateTime.Now;
                         }
-                        
-                        // Update last response time
-                        State.LastResponseTime = DateTime.Now;
+                        break;
                     }
+                    default:
+                        // Multiple processes detected, skip monitoring cycle
+                        await Task.Delay(ProcessUnresponsiveCheckPollingRateMs, cancellationToken);
+                        continue;
                 }
             }
             catch (Exception ex)
@@ -302,7 +313,7 @@ internal static partial class Program
                 if (PendingAffinityChanges.TryDequeue(out var change) && !_processingChanges)
                 {
                     _processingChanges = true;
-                    await SetProcessorAffinity(ProcessName, change.excludedCores, change.priority, cancellationToken);
+                    await SetProcessorAffinity(change.excludedCores, change.priority, cancellationToken);
                     _processingChanges = false;
                 }
             }
@@ -436,6 +447,11 @@ internal static partial class Program
             return CountActiveCores(gameProcess.ProcessorAffinity);
         }
     }
+    
+    private static Process[] GetGameProcesses()
+    {
+        return ProcessNames.SelectMany(Process.GetProcessesByName).ToArray();
+    }
 
     private static async Task MonitorProcess(CancellationToken cancellationToken)
     {
@@ -443,10 +459,28 @@ internal static partial class Program
         {
             try
             {
-                var processes = Process.GetProcessesByName(ProcessName);
+                var processes = GetGameProcesses();
+                
+                if (processes.Length > 1)
+                {
+                    // Multiple processes detected
+                    if (_initialDetectionDone)
+                    {
+                        // Reset monitoring state
+                        _initialDetectionDone = false;
+                        _logFilePath = string.Empty;
+                        _processDirectory = string.Empty;
+                        _cachedCoreCount = null;
+                    }
+                    
+                    WriteLineWithPrefix("warn", "Multiple game processes detected. Please ensure only one instance is running.", true);
+                    await Task.Delay(ProcessMonitorPollingRateMs, cancellationToken);
+                    continue;
+                }
+
                 switch (processes.Length)
                 {
-                    case > 0 when !_initialDetectionDone:
+                    case 1 when !_initialDetectionDone:
                     {
                         var process = processes[0];
                         
@@ -489,16 +523,16 @@ internal static partial class Program
                     
                         // Check if current affinity matches our default
                         var defaultMask = CalculateAffinityMask(DefaultExcludedCores);
-                        var DefaultExcludedCoresOutput = DefaultExcludedCores.Length > 0
+                        var defaultExcludedCoresOutput = DefaultExcludedCores.Length > 0
                             ? string.Join(", ", DefaultExcludedCores)
                             : "None";
                         if (currentAffinity == defaultMask)
                         {
-                            WriteLineWithPrefix("info", $"Default CPU configuration validated (Excluded CPUs: {DefaultExcludedCoresOutput})");
+                            WriteLineWithPrefix("info", $"Default CPU configuration validated (Excluded CPUs: {defaultExcludedCoresOutput})");
                         }
                         else
                         {
-                            WriteLineWithPrefix("action", $"Applying default affinity (Excluded CPUs: {DefaultExcludedCoresOutput})");
+                            WriteLineWithPrefix("action", $"Applying default affinity (Excluded CPUs: {defaultExcludedCoresOutput})");
                             QueueAffinityChange(DefaultExcludedCores, ProcessPriorityClass.Normal);
                         }
                     
@@ -589,73 +623,78 @@ internal static partial class Program
         }
     }
 
-    private static async Task SetProcessorAffinity(string processName, int[] excludedCores, ProcessPriorityClass priority, CancellationToken cancellationToken)
-{
-    try
+    private static async Task SetProcessorAffinity(int[] excludedCores, ProcessPriorityClass priority, CancellationToken cancellationToken)
     {
-        var processes = Process.GetProcessesByName(processName);
-        if (processes.Length == 0)
-        {
-            WriteLineWithPrefix("error", "Process not found.");
-            return;
-        }
-
-        var process = processes[0];
-        var currentAffinity = process.ProcessorAffinity;
-        var newAffinityMask = CalculateAffinityMask(excludedCores);
-        
-        // If affinity is already what we want, just verify priority
-        if (currentAffinity == newAffinityMask)
-        {
-            // Report current configuration instead of showing a non-change
-            WriteLineWithPrefix("info", $"CPU configuration already at desired state ({CountActiveCores(currentAffinity)}/{_totalCores} active)");
-            
-            // Only update priority if it's different
-            if (process.PriorityClass != priority)
-            {
-                try
-                {
-                    process.PriorityClass = priority;
-                    WriteLineWithPrefix("info", $"Process priority set to {priority}");
-                }
-                catch (Exception ex)
-                {
-                    WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
-                }
-            }
-            return;
-        }
-        
-        // Set affinity
-        process.ProcessorAffinity = checked((IntPtr)newAffinityMask);
-        
-        // Set priority
         try
         {
-            process.PriorityClass = priority;
-            WriteLineWithPrefix("info", $"Process priority set to {priority}");
+            var processes = GetGameProcesses();
+            if (processes.Length == 0)
+            {
+                WriteLineWithPrefix("error", "Process not found.");
+                return;
+            }
+            if (processes.Length > 1)
+            {
+                WriteLineWithPrefix("error", "Multiple game processes detected. Skipping affinity change.");
+                return;
+            }
+
+            var process = processes[0];
+            var currentAffinity = process.ProcessorAffinity;
+            var newAffinityMask = CalculateAffinityMask(excludedCores);
+            
+            // If affinity is already what we want, just verify priority
+            if (currentAffinity == newAffinityMask)
+            {
+                // Report current configuration instead of showing a non-change
+                WriteLineWithPrefix("info", $"CPU configuration already at desired state ({CountActiveCores(currentAffinity)}/{_totalCores} active)");
+                
+                // Only update priority if it's different
+                if (process.PriorityClass != priority)
+                {
+                    try
+                    {
+                        process.PriorityClass = priority;
+                        WriteLineWithPrefix("info", $"Process priority set to {priority}");
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
+                    }
+                }
+                return;
+            }
+            
+            // Set affinity
+            process.ProcessorAffinity = checked((IntPtr)newAffinityMask);
+            
+            // Set priority
+            try
+            {
+                process.PriorityClass = priority;
+                WriteLineWithPrefix("info", $"Process priority set to {priority}");
+            }
+            catch (Exception ex)
+            {
+                WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
+            }
+            
+            // Use async delay
+            await Task.Delay(ProcessAffinityApplyDelayMs, cancellationToken);
+            
+            long verifiedAffinity = process.ProcessorAffinity;
+            PrintAffinityChange(currentAffinity, verifiedAffinity);
+            
+            if (verifiedAffinity != newAffinityMask)
+            {
+                WriteLineWithPrefix("error", "Affinity change failed");
+            }
         }
         catch (Exception ex)
         {
-            WriteLineWithPrefix("error", $"Failed to set process priority: {ex.Message}");
-        }
-        
-        // Use async delay
-        await Task.Delay(ProcessAffinityApplyDelayMs, cancellationToken);
-        
-        long verifiedAffinity = process.ProcessorAffinity;
-        PrintAffinityChange(currentAffinity, verifiedAffinity);
-        
-        if (verifiedAffinity != newAffinityMask)
-        {
-            WriteLineWithPrefix("error", "Affinity change failed");
+            WriteLineWithPrefix("error", $"Affinity error: {ex.Message}");
         }
     }
-    catch (Exception ex)
-    {
-        WriteLineWithPrefix("error", $"Affinity error: {ex.Message}");
-    }
-}
     private static void PrintAffinityChange(long before, long after)
     {
         var beforeActive = CountActiveCores(before);
